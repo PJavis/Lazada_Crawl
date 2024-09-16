@@ -102,9 +102,9 @@ def run_scraper():
     service = get_chrome_service()
     driver = webdriver.Chrome(options=options, service=service)
 
-    url_temp = "https://www.lazada.vn/catalog/?q=phone"
+    url_temp = "https://www.lazada.vn/catalog/?q=shirt"
     driver.get(url_temp)
-    time.sleep(40)
+    time.sleep(10)
 
     results = []
 
