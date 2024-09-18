@@ -1,125 +1,113 @@
+import os
+import csv
 from collections import Counter
-from datetime import datetime, timezone
-import time
-import json
-from selenium import webdriver
 from bs4 import BeautifulSoup
+from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from tqdm import tqdm
 from config import get_chrome_options, get_chrome_service
-from utils import crawl_prices_by_combination
 
-def scrape_product(driver, url):
+def load_last_processed_index(filename):
+    try:
+        with open(filename, 'r', encoding='utf-8') as file:
+            return int(file.read().strip())
+    except FileNotFoundError:
+        return 0
+
+def save_last_processed_index(index, filename):
+    with open(filename, 'w', encoding='utf-8') as file:
+        file.write(str(index))
+
+def scrape_reviews(driver, url):
     driver.get(url)
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    
     WebDriverWait(driver, 30).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, "body"))
     )
-    prices = crawl_prices_by_combination(driver)
-    product = {}
-    # Nhấp vào nút "Xem thêm" nếu có
+
+    reviews = [] 
+
     try:
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight / 2);")
-        button = WebDriverWait(driver, 5).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, ".pdp-view-more-btn"))
+        WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, '.pdp-mod-review'))
         )
-        button.click()
-        time.sleep(1)
     except Exception:
-        print(f"Không tìm thấy nút 'Xem thêm' hoặc không thể nhấp vào nút trên trang {url}")
+        print(f"Không tìm thấy phần bình luận {url}")
+        return reviews
 
-    # Phân tích trang với BeautifulSoup
     soup = BeautifulSoup(driver.page_source, 'html.parser')
-
+    
     try:
-        title = soup.find('h1', class_='pdp-mod-product-badge-title')
-        product['name'] = title.get_text(strip=True) if title else 'N/A'
-
-        brand = soup.find('div', class_='pdp-product-brand')
-        if brand:
-            brand_link = brand.find('a', class_='pdp-product-brand__brand-link')
-            product['brand'] = brand_link.get_text(strip=True) if brand_link else 'N/A'
-        else:
-            product['brand'] = 'N/A'
-
-        product_detail = soup.find('div', class_='pdp-product-detail')
-        product['description'] = product_detail.get_text(strip=True) if product_detail else 'N/A'
-
         review_elements = soup.find('div', class_='mod-reviews')
-        reviews = []
+
         if review_elements:
             items = review_elements.find_all('div', class_='item')
             for item in items:
                 review = {}
                 stars_container = item.find('div', class_='container-star')
                 if stars_container:
-
                     star_images = stars_container.find_all('img', class_='star')
-    
                     src_list = [img['src'] for img in star_images]
-
                     src_count = Counter(src_list)
-
                     num_stars_gold = sum(count for src, count in src_count.items() if "TB19ZvEgfDH8KJjy1XcXXcpdXXa-64-64.png" in src)
-
                     review['rating'] = num_stars_gold
-
+                
                 content_element = item.find('div', class_='item-content')
                 review['content'] = content_element.get_text(strip=True) if content_element else 'N/A'
                 reviews.append(review)
-        product['reviews'] = reviews
-
-        # Lấy tất cả các ảnh
-        image_elements = soup.select('.item-gallery img')
-        image_sources = [img['src'] for img in image_elements]
-        product['images'] = image_sources
-
-        # Lấy thông tin người bán và thông số của họ
-        seller_info_div = soup.find('div', id='module_seller_info')
-        if seller_info_div:
-            seller_name = seller_info_div.find('a', class_='seller-name__detail-name').text.strip()
-            ratings = seller_info_div.find('div', class_='seller-info-value rating-positive').text.strip()
-            seller_info = seller_info_div.find_all('div', class_='seller-info-value')
-            ship_on_time = seller_info[1].text.strip() if len(seller_info) > 1 else 'N/A'
-            chat_response = seller_info[2].text.strip() if len(seller_info) > 2 else 'N/A'
-
-            product['seller_name'] = seller_name
-            product['ratings'] = ratings
-            product['ship_on_time'] = ship_on_time
-            product['chat_response'] = chat_response
-
-        product['url'] = url
-        product['prices'] = prices
     except Exception as e:
         print(f"Error: {e} trên trang {url}")
 
-    return product
+    return reviews 
 
+def write_to_csv(csv_filename, reviews):
+    """Appends reviews to the CSV file."""
+    with open(csv_filename, 'a', newline='', encoding='utf-8') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        for review in reviews:
+            if review.get('content') != 'N/A':
+                cleaned_content = review.get('content', '').replace('\n', ' ').strip()
+                csvwriter.writerow([review.get('rating', 'N/A'), cleaned_content])
 
 def run_scraper():
     options = get_chrome_options()
     service = get_chrome_service()
     driver = webdriver.Chrome(options=options, service=service)
 
-    url_temp = "https://www.lazada.vn/catalog/?q=shirt"
-    driver.get(url_temp)
-    time.sleep(10)
+    batch_size = 5
+    csv_filename = 'reviews.csv'
+    last_processed_index_file = 'last_processed_index.txt'
 
-    results = []
+    last_processed_index = load_last_processed_index(last_processed_index_file)
 
-    with open('urls1.txt', 'r', encoding='utf-8') as file:
+    file_exists = os.path.exists(csv_filename)
+    if not file_exists:
+        with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerow(['rating', 'review'])  
+
+    with open('urls.txt', 'r', encoding='utf-8') as file:
         urls = file.readlines()
-        for url in urls:
-            url = url.strip()
-            product = scrape_product(driver, url)
-            results.append(product)
+        remaining_urls = urls[last_processed_index:]
+
+        while remaining_urls:
+            batch = remaining_urls[:batch_size]
+            remaining_urls = remaining_urls[batch_size:]
+
+            current_index = last_processed_index + len(batch)
+
+            for url in tqdm(batch, desc="Scraping products"):
+                url = url.strip()
+                reviews = scrape_reviews(driver, url)  
+                write_to_csv(csv_filename, reviews)  
+            
+            save_last_processed_index(current_index, last_processed_index_file)
+            last_processed_index = current_index
 
     driver.quit()
-
-    # Lưu dữ liệu vào file JSON
-    with open('products.json', 'w', encoding='utf-8') as f:
-        json.dump(results, f, indent=4, ensure_ascii=False)
 
 if __name__ == "__main__":
     run_scraper()
