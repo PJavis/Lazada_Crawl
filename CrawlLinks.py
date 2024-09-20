@@ -7,7 +7,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 from config import get_chrome_options, get_chrome_service
-from utils import crawl_prices_by_combination
+# from utils import crawl_prices_by_combination
 
 
 options = get_chrome_options()
@@ -16,13 +16,13 @@ driver = webdriver.Chrome(options=options, service=service)
 
 # URL của trang web
 URL1 = "https://www.lazada.vn/catalog/?page="
-URL2 = "&q=shirt"
+URL2 = "&q=jeans"
 
 # Sử dụng tập hợp để lưu các liên kết không trùng lặp
 unique_hrefs = set()
 
 # Lặp qua các trang
-for i in range(1, 20):
+for i in range(1, 10):
     # Kết hợp URL và mở trang
     full_url = URL1 + str(i) + URL2
     driver.get(full_url)

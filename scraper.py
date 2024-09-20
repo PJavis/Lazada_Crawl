@@ -82,7 +82,7 @@ def run_scraper():
     driver = webdriver.Chrome(options=options, service=service)
 
     batch_size = 5
-    csv_filename = 'reviews_2.csv'
+    csv_filename = 'reviews.csv'
     last_processed_index_file = 'last_processed_index.txt'
 
     last_processed_index = load_last_processed_index(last_processed_index_file)
