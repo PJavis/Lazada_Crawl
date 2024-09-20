@@ -55,8 +55,12 @@ def scrape_reviews(driver, url):
                     num_stars_gold = sum(count for src, count in src_count.items() if "TB19ZvEgfDH8KJjy1XcXXcpdXXa-64-64.png" in src)
                     review['rating'] = num_stars_gold
                 
-                content_element = item.find('div', class_='item-content')
+                item_content = item.find('div', class_='item-content')
+                if item_content:
+                    content_element = item_content.find('div', class_='content')
+
                 review['content'] = content_element.get_text(strip=True) if content_element else 'N/A'
+                review['url'] = url
                 reviews.append(review)
     except Exception as e:
         print(f"Error: {e} trên trang {url}")
@@ -78,7 +82,7 @@ def run_scraper():
     driver = webdriver.Chrome(options=options, service=service)
 
     batch_size = 5
-    csv_filename = 'reviews.csv'
+    csv_filename = 'reviews_2.csv'
     last_processed_index_file = 'last_processed_index.txt'
 
     last_processed_index = load_last_processed_index(last_processed_index_file)
