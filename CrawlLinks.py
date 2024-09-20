@@ -16,7 +16,7 @@ driver = webdriver.Chrome(options=options, service=service)
 
 # URL của trang web
 URL1 = "https://www.lazada.vn/catalog/?page="
-URL2 = "&q=jeans"
+URL2 = "&q=jacket"
 
 # Sử dụng tập hợp để lưu các liên kết không trùng lặp
 unique_hrefs = set()
